@@ -1,0 +1,52 @@
+# OpenBenchVue Configuration File
+# Edit this file to customize application settings
+
+# VISA Configuration
+visa:
+  backend: '@iolib'  # '@iolib' for Keysight/NI, '@py' for pyvisa-py
+  timeout: 5000      # Communication timeout in milliseconds
+  query_delay: 0.01  # Delay between write and read (seconds)
+  chunk_size: 20480  # Data transfer chunk size (bytes)
+
+# GUI Settings
+gui:
+  theme: 'light'        # 'light' or 'dark'
+  update_rate: 100      # GUI update interval (milliseconds)
+  plot_points: 1000     # Maximum points in real-time plots
+  font_size: 10         # Default font size
+  window_geometry: null # Saved window position (auto-saved)
+
+# Remote Web Server
+remote:
+  enabled: false   # Auto-start remote server on launch
+  host: '0.0.0.0'  # Server host ('0.0.0.0' for all interfaces)
+  port: 5000       # Server port
+  debug: false     # Flask debug mode
+
+# Logging
+logging:
+  level: 'INFO'              # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: 'openbenchvue.log'   # Log file path
+  max_bytes: 10485760        # Max log file size (10 MB)
+  backup_count: 5            # Number of backup log files
+  console: true              # Log to console
+
+# Data Handling
+data:
+  default_export_format: 'csv'  # Default export format
+  export_directory: './data'     # Default export directory
+  auto_save: false               # Automatically save data on stop
+  buffer_size: 10000             # Max data points in memory
+
+# Test Automation
+automation:
+  max_iterations: 10000   # Safety limit for loop iterations
+  execution_timeout: 3600 # Maximum sequence execution time (seconds)
+  stop_on_error: true     # Stop sequence on first error
+
+# Instrument Settings
+instruments:
+  auto_detect: true        # Auto-detect instruments on startup
+  connection_retry: 3      # Number of connection retry attempts
+  reconnect_delay: 2.0     # Delay between retries (seconds)
+  scan_timeout: 10.0       # Device scan timeout (seconds)

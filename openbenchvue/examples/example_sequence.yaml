@@ -1,0 +1,84 @@
+name: Example Power Supply Test
+description: Demonstrates basic power supply control, measurement, and data logging
+metadata:
+  author: OpenBenchVue
+  version: '1.0'
+  created: '2025-01-01'
+blocks:
+- type: CommentBlock
+  block_id: comment1
+  parameters:
+    text: 'This sequence demonstrates controlling a power supply and logging measurements'
+- type: SetVoltageBlock
+  block_id: set_v1
+  parameters:
+    instrument: PSU1
+    channel: 1
+    voltage: 5.0
+- type: SetCurrentBlock
+  block_id: set_i1
+  parameters:
+    instrument: PSU1
+    channel: 1
+    current: 1.0
+- type: OutputEnableBlock
+  block_id: enable1
+  parameters:
+    instrument: PSU1
+    channel: 1
+    enable: true
+- type: DelayBlock
+  block_id: delay1
+  parameters:
+    duration: 2.0
+- type: CommentBlock
+  block_id: comment2
+  parameters:
+    text: 'Take 10 measurements and log the results'
+- type: LoopBlock
+  block_id: loop1
+  parameters:
+    iterations: 10
+    variable: i
+- type: MeasureBlock
+  block_id: measure1
+  parameters:
+    instrument: DMM1
+    variable: voltage
+- type: LogDataBlock
+  block_id: log1
+  parameters:
+    variable: voltage
+    label: Output Voltage
+- type: DelayBlock
+  block_id: delay2
+  parameters:
+    duration: 0.5
+- type: CommentBlock
+  block_id: comment3
+  parameters:
+    text: 'Verify voltage is within acceptable range'
+- type: AssertBlock
+  block_id: assert1
+  parameters:
+    variable: voltage
+    operator: '>='
+    value: 4.9
+    message: Voltage too low
+- type: AssertBlock
+  block_id: assert2
+  parameters:
+    variable: voltage
+    operator: '<='
+    value: 5.1
+    message: Voltage too high
+- type: CommentBlock
+  block_id: comment4
+  parameters:
+    text: 'Turn off the power supply'
+- type: OutputEnableBlock
+  block_id: disable1
+  parameters:
+    instrument: PSU1
+    channel: 1
+    enable: false
