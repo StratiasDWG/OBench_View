@@ -10,11 +10,12 @@ visa:
 
 # GUI Settings
 gui:
-  theme: 'light'        # 'light' or 'dark'
+  theme: 'light'        # 'light', 'dark', or 'high_contrast'
   update_rate: 100      # GUI update interval (milliseconds)
   plot_points: 1000     # Maximum points in real-time plots
   font_size: 10         # Default font size
   window_geometry: null # Saved window position (auto-saved)
+  enable_advanced_widgets: true  # Use enhanced gauges and displays
 
 # Remote Web Server
 remote:
@@ -50,3 +51,18 @@ instruments:
   connection_retry: 3      # Number of connection retry attempts
   reconnect_delay: 2.0     # Delay between retries (seconds)
   scan_timeout: 10.0       # Device scan timeout (seconds)
+  enable_caching: true     # Enable response caching for performance
+  cache_ttl: 0.1           # Cache time-to-live (seconds)
+  enable_metrics: true     # Track performance metrics
+  use_connection_pool: false  # Use connection pooling
+
+# Advanced Data Processing
+advanced_processing:
+  enable_streaming: true          # Use streaming processors
+  streaming_buffer_size: 1000     # Streaming buffer size
+  enable_decimation: false        # Use adaptive decimation
+  decimation_target_rate: 1000    # Target decimation rate (points/s)
+  enable_fft: true                # Enable real-time FFT
+  fft_size: 1024                  # FFT window size
+  fft_window: 'hann'              # FFT window type
+  enable_quality_analysis: true   # Analyze data quality

@@ -13,6 +13,44 @@ from .function_generator import FunctionGenerator
 from .power_analyzer import PowerAnalyzer
 from .detector import InstrumentDetector
 
+# Import enhanced instrument features (optional, for enhanced functionality)
+try:
+    from .enhanced_base import (
+        EnhancedInstrument,
+        InstrumentPool,
+        PerformanceMetrics,
+    )
+
+    __all__ = [
+        'BaseInstrument',
+        'InstrumentError',
+        'InstrumentType',
+        'DigitalMultimeter',
+        'Oscilloscope',
+        'PowerSupply',
+        'FunctionGenerator',
+        'PowerAnalyzer',
+        'InstrumentDetector',
+        'INSTRUMENT_CLASSES',
+        'EnhancedInstrument',
+        'InstrumentPool',
+        'PerformanceMetrics',
+    ]
+except ImportError:
+    # Enhanced features not available, continue with basic functionality
+    __all__ = [
+        'BaseInstrument',
+        'InstrumentError',
+        'InstrumentType',
+        'DigitalMultimeter',
+        'Oscilloscope',
+        'PowerSupply',
+        'FunctionGenerator',
+        'PowerAnalyzer',
+        'InstrumentDetector',
+        'INSTRUMENT_CLASSES',
+    ]
+
 # Registry of all available instrument classes
 INSTRUMENT_CLASSES = [
     DigitalMultimeter,
@@ -20,17 +58,4 @@ INSTRUMENT_CLASSES = [
     PowerSupply,
     FunctionGenerator,
     PowerAnalyzer,
-]
-
-__all__ = [
-    'BaseInstrument',
-    'InstrumentError',
-    'InstrumentType',
-    'DigitalMultimeter',
-    'Oscilloscope',
-    'PowerSupply',
-    'FunctionGenerator',
-    'PowerAnalyzer',
-    'InstrumentDetector',
-    'INSTRUMENT_CLASSES',
 ]
