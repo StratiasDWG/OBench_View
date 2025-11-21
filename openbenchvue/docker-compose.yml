@@ -1,0 +1,110 @@
+# Docker Compose configuration for OpenBenchVue
+version: '3.8'
+
+services:
+  # Main OpenBenchVue application
+  openbenchvue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openbenchvue
+    restart: unless-stopped
+    ports:
+      - "5000:5000"  # Web interface
+    volumes:
+      - ./data:/data  # Data persistence
+      - ./config.yaml:/app/config.yaml:ro  # Configuration
+      - ./logs:/app/logs  # Log files
+    environment:
+      - OPENBENCHVUE_CONFIG=/app/config.yaml
+      - OPENBENCHVUE_LOG_LEVEL=INFO
+    # USB device access (uncomment and modify for your devices)
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+    # privileged: true  # Required for USB access
+    networks:
+      - openbench-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Database for data storage (PostgreSQL)
+  database:
+    image: postgres:15-alpine
+    container_name: openbenchvue-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=openbenchvue
+      - POSTGRES_USER=openbench
+      - POSTGRES_PASSWORD=changeme  # Change in production!
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - openbench-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbench"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: openbenchvue-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - openbench-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: openbenchvue-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Change in production!
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - openbench-network
+    depends_on:
+      - database
+
+  # Optional: Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: openbenchvue-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - openbench-network
+
+networks:
+  openbench-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  grafana-data:
+  prometheus-data:
