@@ -14,6 +14,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Lazy import to avoid circular dependency
+_audit_logger = None
+
+def _get_audit_logger():
+    """Lazy load audit logger to avoid circular imports"""
+    global _audit_logger
+    if _audit_logger is None:
+        try:
+            from .audit import audit_logger
+            _audit_logger = audit_logger
+        except ImportError:
+            _audit_logger = None
+    return _audit_logger
+
 
 @dataclass
 class User:
@@ -139,16 +153,30 @@ class AuthenticationManager:
         self._create_default_admin()
 
     def _create_default_admin(self):
-        """Create default admin user"""
+        """Create default admin user with secure random password"""
+        # Generate secure random password
+        temp_password = secrets.token_urlsafe(16)
+
         admin = User(
             username='admin',
-            password_hash=hash_password('admin'),  # Change in production!
+            password_hash=hash_password(temp_password),
             email='admin@openbenchvue.local',
             full_name='Administrator',
             roles=['admin', 'user'],
         )
         self._users['admin'] = admin
-        logger.warning("Created default admin user with password 'admin'. Change immediately!")
+
+        # Log the temporary password securely
+        logger.critical(
+            "\n" + "=" * 80 + "\n"
+            "DEFAULT ADMIN USER CREATED\n"
+            f"Username: admin\n"
+            f"Temporary Password: {temp_password}\n"
+            "\n"
+            "⚠️  IMPORTANT: Change this password immediately after first login!\n"
+            "⚠️  This password will not be shown again.\n"
+            "=" * 80
+        )
 
     def register_user(
         self,
@@ -171,13 +199,21 @@ class AuthenticationManager:
         Returns:
             True if registration succeeded, False otherwise
         """
+        audit = _get_audit_logger()
+
         if username in self._users:
             logger.warning(f"User {username} already exists")
+            if audit:
+                audit.log_authentication('register', username, result='failure',
+                                        reason='username_already_exists')
             return False
 
         # Validate password strength
         if not self._validate_password_strength(password):
             logger.warning("Password does not meet strength requirements")
+            if audit:
+                audit.log_authentication('register', username, result='failure',
+                                        reason='weak_password')
             return False
 
         user = User(
@@ -190,22 +226,33 @@ class AuthenticationManager:
 
         self._users[username] = user
         logger.info(f"Registered user: {username}")
+
+        if audit:
+            audit.log_authentication('register', username, result='success',
+                                    email=email, roles=roles or ['user'])
+
         return True
 
-    def login(self, username: str, password: str) -> Optional[Token]:
+    def login(self, username: str, password: str, ip_address: Optional[str] = None) -> Optional[Token]:
         """
         Authenticate user and create token
 
         Args:
             username: Username
             password: Plain text password
+            ip_address: IP address of the user (for audit logging)
 
         Returns:
             Token if authentication succeeded, None otherwise
         """
+        audit = _get_audit_logger()
+
         # Check if account is locked
         if self._is_locked_out(username):
             logger.warning(f"Account {username} is locked out")
+            if audit:
+                audit.log_authentication('login', username, result='failure',
+                                        reason='account_locked', ip_address=ip_address)
             return None
 
         # Get user
@@ -213,12 +260,19 @@ class AuthenticationManager:
         if user is None or not user.enabled:
             self._record_failed_attempt(username)
             logger.warning(f"Login failed: user {username} not found or disabled")
+            if audit:
+                audit.log_authentication('login', username, result='failure',
+                                        reason='user_not_found_or_disabled',
+                                        ip_address=ip_address)
             return None
 
         # Verify password
         if not verify_password(password, user.password_hash):
             self._record_failed_attempt(username)
             logger.warning(f"Login failed: invalid password for {username}")
+            if audit:
+                audit.log_authentication('login', username, result='failure',
+                                        reason='invalid_password', ip_address=ip_address)
             return None
 
         # Clear failed attempts
@@ -237,6 +291,10 @@ class AuthenticationManager:
         self._tokens[token.token] = token
         logger.info(f"User {username} logged in")
 
+        if audit:
+            audit.log_authentication('login', username, result='success',
+                                    ip_address=ip_address)
+
         return token
 
     def logout(self, token_str: str) -> bool:
@@ -249,11 +307,22 @@ class AuthenticationManager:
         Returns:
             True if logout succeeded
         """
+        audit = _get_audit_logger()
+
         if token_str in self._tokens:
             username = self._tokens[token_str].username
             del self._tokens[token_str]
             logger.info(f"User {username} logged out")
+
+            if audit:
+                audit.log_authentication('logout', username, result='success')
+
             return True
+
+        if audit:
+            audit.log_authentication('logout', 'unknown', result='failure',
+                                    reason='invalid_token')
+
         return False
 
     def validate_token(self, token_str: str) -> Optional[User]:
@@ -341,19 +410,35 @@ class AuthenticationManager:
         return list(self._users.values())
 
     def _validate_password_strength(self, password: str) -> bool:
-        """Validate password meets minimum requirements"""
+        """
+        Validate password meets security requirements
+
+        Requirements:
+        - Minimum 8 characters
+        - At least one uppercase letter
+        - At least one lowercase letter
+        - At least one digit
+        - At least one special character
+        """
         if len(password) < 8:
+            logger.debug("Password too short (minimum 8 characters)")
             return False
 
-        # Check for at least one uppercase, lowercase, and digit
         has_upper = any(c.isupper() for c in password)
         has_lower = any(c.islower() for c in password)
         has_digit = any(c.isdigit() for c in password)
+        has_special = any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?/~`' for c in password)
 
-        # For development, just check length
-        # In production, uncomment the line below
-        # return has_upper and has_lower and has_digit
-        return True
+        if not has_upper:
+            logger.debug("Password missing uppercase letter")
+        if not has_lower:
+            logger.debug("Password missing lowercase letter")
+        if not has_digit:
+            logger.debug("Password missing digit")
+        if not has_special:
+            logger.debug("Password missing special character")
+
+        return has_upper and has_lower and has_digit and has_special
 
     def _is_locked_out(self, username: str) -> bool:
         """Check if account is locked out due to failed attempts"""

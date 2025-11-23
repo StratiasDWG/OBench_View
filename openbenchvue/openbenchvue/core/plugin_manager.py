@@ -30,6 +30,7 @@ import os
 import sys
 import importlib
 import importlib.util
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type, Callable
@@ -142,6 +143,7 @@ class PluginManager:
         self.plugin_dirs = plugin_dirs or []
         self._plugin_types: Dict[str, List[Plugin]] = {}
         self._hooks: Dict[str, List[Callable]] = {}
+        self._lock = threading.RLock()  # Thread safety for plugin operations
 
     def add_plugin_directory(self, directory: str):
         """Add a directory to scan for plugins"""
@@ -244,50 +246,51 @@ class PluginManager:
             logger.info(f"Plugin {plugin.metadata.name} is disabled")
             return False
 
-        # Check dependencies
-        for dep in plugin.metadata.dependencies:
-            if dep not in self.plugins:
-                logger.error(
-                    f"Plugin {plugin.metadata.name} requires {dep}, "
-                    f"but it is not loaded"
+        with self._lock:
+            # Check dependencies
+            for dep in plugin.metadata.dependencies:
+                if dep not in self.plugins:
+                    logger.error(
+                        f"Plugin {plugin.metadata.name} requires {dep}, "
+                        f"but it is not loaded"
+                    )
+                    return False
+
+            # Validate and initialize
+            config = config or {}
+            if not plugin.validate_config(config):
+                logger.error(f"Invalid config for plugin {plugin.metadata.name}")
+                return False
+
+            try:
+                if not plugin.initialize(config):
+                    logger.error(f"Plugin {plugin.metadata.name} initialization failed")
+                    return False
+
+                plugin._initialized = True
+                plugin._config = config
+
+                # Register plugin
+                self.plugins[plugin.metadata.name] = plugin
+
+                # Add to type index
+                plugin_type = plugin.metadata.plugin_type
+                if plugin_type not in self._plugin_types:
+                    self._plugin_types[plugin_type] = []
+                self._plugin_types[plugin_type].append(plugin)
+
+                # Sort by priority
+                self._plugin_types[plugin_type].sort(
+                    key=lambda p: p.metadata.priority
                 )
+
+                logger.info(f"Registered plugin: {plugin.metadata.name}")
+                self._emit_hook('plugin_registered', plugin)
+                return True
+
+            except Exception as e:
+                logger.error(f"Error registering plugin {plugin.metadata.name}: {e}")
                 return False
-
-        # Validate and initialize
-        config = config or {}
-        if not plugin.validate_config(config):
-            logger.error(f"Invalid config for plugin {plugin.metadata.name}")
-            return False
-
-        try:
-            if not plugin.initialize(config):
-                logger.error(f"Plugin {plugin.metadata.name} initialization failed")
-                return False
-
-            plugin._initialized = True
-            plugin._config = config
-
-            # Register plugin
-            self.plugins[plugin.metadata.name] = plugin
-
-            # Add to type index
-            plugin_type = plugin.metadata.plugin_type
-            if plugin_type not in self._plugin_types:
-                self._plugin_types[plugin_type] = []
-            self._plugin_types[plugin_type].append(plugin)
-
-            # Sort by priority
-            self._plugin_types[plugin_type].sort(
-                key=lambda p: p.metadata.priority
-            )
-
-            logger.info(f"Registered plugin: {plugin.metadata.name}")
-            self._emit_hook('plugin_registered', plugin)
-            return True
-
-        except Exception as e:
-            logger.error(f"Error registering plugin {plugin.metadata.name}: {e}")
-            return False
 
     def unregister(self, plugin_name: str) -> bool:
         """
@@ -299,38 +302,42 @@ class PluginManager:
         Returns:
             True if unregistration succeeded
         """
-        if plugin_name not in self.plugins:
-            logger.warning(f"Plugin {plugin_name} not found")
-            return False
+        with self._lock:
+            if plugin_name not in self.plugins:
+                logger.warning(f"Plugin {plugin_name} not found")
+                return False
 
-        plugin = self.plugins[plugin_name]
+            plugin = self.plugins[plugin_name]
 
-        try:
-            plugin.shutdown()
+            try:
+                plugin.shutdown()
 
-            # Remove from registries
-            del self.plugins[plugin_name]
-            self._plugin_types[plugin.metadata.plugin_type].remove(plugin)
+                # Remove from registries
+                del self.plugins[plugin_name]
+                self._plugin_types[plugin.metadata.plugin_type].remove(plugin)
 
-            logger.info(f"Unregistered plugin: {plugin_name}")
-            self._emit_hook('plugin_unregistered', plugin)
-            return True
+                logger.info(f"Unregistered plugin: {plugin_name}")
+                self._emit_hook('plugin_unregistered', plugin)
+                return True
 
-        except Exception as e:
-            logger.error(f"Error unregistering plugin {plugin_name}: {e}")
-            return False
+            except Exception as e:
+                logger.error(f"Error unregistering plugin {plugin_name}: {e}")
+                return False
 
     def get_plugin(self, name: str) -> Optional[Plugin]:
         """Get a plugin by name"""
-        return self.plugins.get(name)
+        with self._lock:
+            return self.plugins.get(name)
 
     def get_plugins_by_type(self, plugin_type: str) -> List[Plugin]:
         """Get all plugins of a specific type"""
-        return self._plugin_types.get(plugin_type, [])
+        with self._lock:
+            return self._plugin_types.get(plugin_type, []).copy()
 
     def get_all_plugins(self) -> List[Plugin]:
         """Get all registered plugins"""
-        return list(self.plugins.values())
+        with self._lock:
+            return list(self.plugins.values())
 
     def reload_plugin(self, plugin_name: str) -> bool:
         """

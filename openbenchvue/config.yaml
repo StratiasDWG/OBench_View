@@ -66,3 +66,44 @@ advanced_processing:
   fft_size: 1024                  # FFT window size
   fft_window: 'hann'              # FFT window type
   enable_quality_analysis: true   # Analyze data quality
+
+# Security Settings
+security:
+  authentication_enabled: true    # Require authentication
+  token_expiry_hours: 24         # Token expiration time (hours)
+  max_login_attempts: 5          # Max failed login attempts before lockout
+  lockout_duration_minutes: 30   # Account lockout duration (minutes)
+  require_strong_passwords: true # Enforce strong password requirements
+  enable_audit_logging: true     # Enable comprehensive audit logging
+  audit_log_file: 'audit.log'    # Audit log file path
+
+# Plugin System
+plugins:
+  enabled: true                   # Enable plugin system
+  plugin_directories:             # Directories to scan for plugins
+    - './plugins'
+    - '~/.openbenchvue/plugins'
+  auto_discover: true            # Automatically discover plugins on startup
+  auto_load: false               # Automatically load discovered plugins (security risk)
+
+# Analytics Settings
+analytics:
+  anomaly_detection_enabled: true          # Enable anomaly detection
+  anomaly_detector_type: 'statistical'     # 'statistical' or 'isolation_forest'
+  anomaly_sensitivity: 3.0                 # Sensitivity (standard deviations)
+  anomaly_window_size: 100                 # Window size for detection
+  trend_analysis_enabled: true             # Enable trend analysis
+  forecasting_enabled: true                # Enable forecasting
+  forecasting_method: 'linear'             # 'linear', 'moving_average', or 'exponential'
+  forecasting_confidence: 0.95             # Confidence interval (0-1)
+
+# Event Bus Configuration
+event_bus:
+  async_mode: true               # Process events asynchronously
+  max_queue_size: 1000          # Maximum event queue size
+  worker_threads: 1             # Number of worker threads
+
+# Dependency Injection
+dependency_injection:
+  auto_wire: true               # Automatically wire dependencies
+  lazy_initialization: false    # Lazy vs eager initialization
