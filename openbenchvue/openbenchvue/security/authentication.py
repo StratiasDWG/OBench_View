@@ -132,6 +132,7 @@ class AuthenticationManager:
         token_expiry_hours: int = 24,
         max_login_attempts: int = 5,
         lockout_duration_minutes: int = 30,
+        create_default_admin: bool = True,
     ):
         """
         Initialize authentication manager
@@ -140,6 +141,7 @@ class AuthenticationManager:
             token_expiry_hours: Token expiration time in hours
             max_login_attempts: Maximum failed login attempts before lockout
             lockout_duration_minutes: Lockout duration in minutes
+            create_default_admin: Whether to create default admin user
         """
         self.token_expiry_hours = token_expiry_hours
         self.max_login_attempts = max_login_attempts
@@ -149,8 +151,9 @@ class AuthenticationManager:
         self._tokens: Dict[str, Token] = {}
         self._login_attempts: Dict[str, List[float]] = {}
 
-        # Create default admin user
-        self._create_default_admin()
+        # Create default admin user if requested
+        if create_default_admin:
+            self._create_default_admin()
 
     def _create_default_admin(self):
         """Create default admin user with secure random password"""
@@ -200,6 +203,22 @@ class AuthenticationManager:
             True if registration succeeded, False otherwise
         """
         audit = _get_audit_logger()
+
+        # Validate username
+        if not self._validate_username(username):
+            logger.warning(f"Invalid username: {username}")
+            if audit:
+                audit.log_authentication('register', username or 'invalid', result='failure',
+                                        reason='invalid_username')
+            return False
+
+        # Validate password
+        if not self._validate_password_input(password):
+            logger.warning("Invalid password input")
+            if audit:
+                audit.log_authentication('register', username, result='failure',
+                                        reason='invalid_password_input')
+            return False
 
         if username in self._users:
             logger.warning(f"User {username} already exists")
@@ -408,6 +427,91 @@ class AuthenticationManager:
     def list_users(self) -> List[User]:
         """List all users"""
         return list(self._users.values())
+
+    def _validate_username(self, username: str) -> bool:
+        """
+        Validate username meets requirements
+
+        Requirements:
+        - Not None
+        - Not empty string
+        - Length between 3 and 50 characters
+        - Only alphanumeric, underscore, dash, dot
+        - Does not start or end with special characters
+
+        Args:
+            username: Username to validate
+
+        Returns:
+            True if valid, False otherwise
+        """
+        if username is None:
+            logger.debug("Username is None")
+            return False
+
+        if not isinstance(username, str):
+            logger.debug(f"Username is not a string: {type(username)}")
+            return False
+
+        if len(username) == 0:
+            logger.debug("Username is empty")
+            return False
+
+        if len(username) < 3:
+            logger.debug("Username too short (minimum 3 characters)")
+            return False
+
+        if len(username) > 50:
+            logger.debug("Username too long (maximum 50 characters)")
+            return False
+
+        # Check for valid characters
+        import re
+        if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$', username):
+            if len(username) == 3:
+                # For 3-char usernames, just alphanumeric
+                if not re.match(r'^[a-zA-Z0-9]+$', username):
+                    logger.debug("Username contains invalid characters")
+                    return False
+            else:
+                logger.debug("Username contains invalid characters or starts/ends with special char")
+                return False
+
+        return True
+
+    def _validate_password_input(self, password: str) -> bool:
+        """
+        Validate password input (basic checks before strength validation)
+
+        Requirements:
+        - Not None
+        - Is a string
+        - Not empty
+        - Length <= 128 characters (prevent DOS)
+
+        Args:
+            password: Password to validate
+
+        Returns:
+            True if valid input, False otherwise
+        """
+        if password is None:
+            logger.debug("Password is None")
+            return False
+
+        if not isinstance(password, str):
+            logger.debug(f"Password is not a string: {type(password)}")
+            return False
+
+        if len(password) == 0:
+            logger.debug("Password is empty")
+            return False
+
+        if len(password) > 128:
+            logger.debug("Password too long (maximum 128 characters)")
+            return False
+
+        return True
 
     def _validate_password_strength(self, password: str) -> bool:
         """
